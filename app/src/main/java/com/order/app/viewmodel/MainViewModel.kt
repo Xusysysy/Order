@@ -284,6 +284,11 @@ class MainViewModel(
             _allOrders.value = orders
             _activeOrderCount.value = orders.count { it.status == OrderEntity.STATUS_ACTIVE }
             _selectedBillId.value = null
+            val ids = orders.flatMap { it.items.map { i -> i.menuItemId } }.distinct()
+            if (ids.isNotEmpty()) {
+                val recipes = menuRepository.getRecipesForMenuItems(ids)
+                _recipeMap.value = _recipeMap.value + recipes
+            }
         }
     }
 

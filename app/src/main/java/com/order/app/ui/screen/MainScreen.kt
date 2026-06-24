@@ -1,10 +1,6 @@
 package com.order.app.ui.screen
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -13,14 +9,10 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -586,10 +578,6 @@ private fun TabletBillPanel(
     recipeMap: Map<Long, RecipeData>,
     onRequestDeleteOrder: (Long) -> Unit
 ) {
-    LaunchedEffect(allOrders) {
-        val ids = allOrders.flatMap { it.items.map { i -> i.menuItemId } }.distinct()
-        viewModel.loadRecipesForMenuItems(ids)
-    }
     LazyColumn(modifier = Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // Current order
         if (currentOrder != null && currentOrder.items.isNotEmpty()) {
@@ -630,42 +618,44 @@ private fun TabletBillPanel(
             items(allOrders, key = { it.orderId }) { bill ->
                 val isSelected = bill.orderId == selectedBillId
                 val isSettled = bill.status == "SETTLED"
-                SwipeableOrderCard(
-                    onDelete = { onRequestDeleteOrder(bill.orderId) },
-                    enabled = !isSettled
+                Card(
+                    modifier = Modifier.fillMaxWidth().animateItem().then(
+                        if (!isSettled) Modifier.clickable { viewModel.selectBill(bill.orderId) } else Modifier
+                    ),
+                    colors = CardDefaults.cardColors(containerColor = when {
+                        isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        isSettled -> MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)
+                        else -> MaterialTheme.colorScheme.surface
+                    }),
+                    border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
                 ) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth().animateItem().then(
-                            if (!isSettled) Modifier.clickable { viewModel.selectBill(bill.orderId) } else Modifier
-                        ),
-                        colors = CardDefaults.cardColors(containerColor = when {
-                            isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                            isSettled -> MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)
-                            else -> MaterialTheme.colorScheme.surface
-                        }),
-                        border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column {
                                 Text(bill.tableName, style = MaterialTheme.typography.bodyMedium, color = if (isSettled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface)
                                 Text(if (isSettled) "已结账" else "${bill.itemCount}件 ¥%.0f".format(bill.totalPrice), style = MaterialTheme.typography.bodySmall, color = if (isSettled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f) else MaterialTheme.colorScheme.primary)
                             }
-                            if (isSelected && !isSettled) {
-                                Spacer(Modifier.height(4.dp))
-                                HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
-                                bill.items.forEach { item ->
-                                    Column {
-                                        Row(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
-                                            Text(item.name, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                                            Text("x${item.quantity}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                                        }
-                                        RecipeSubCard(recipe = recipeMap[item.menuItemId])
+                            if (!isSettled) {
+                                TextButton(onClick = { onRequestDeleteOrder(bill.orderId) }) {
+                                    Text("删除", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
+                        if (isSelected && !isSettled) {
+                            Spacer(Modifier.height(4.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
+                            bill.items.forEach { item ->
+                                Column {
+                                    Row(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
+                                        Text(item.name, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                                        Text("x${item.quantity}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                                     }
+                                    RecipeSubCard(recipe = recipeMap[item.menuItemId])
                                 }
-                                Button(onClick = { viewModel.settleBill(bill.orderId) }, modifier = Modifier.fillMaxWidth().height(40.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
-                                    Text("结账", style = MaterialTheme.typography.bodySmall)
-                                }
+                            }
+                            Button(onClick = { viewModel.settleBill(bill.orderId) }, modifier = Modifier.fillMaxWidth().height(40.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                                Text("结账", style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
@@ -782,10 +772,6 @@ private fun PhoneBillPanel(
     recipeMap: Map<Long, RecipeData>,
     onRequestDeleteOrder: (Long) -> Unit
 ) {
-    LaunchedEffect(allOrders) {
-        val ids = allOrders.flatMap { it.items.map { i -> i.menuItemId } }.distinct()
-        viewModel.loadRecipesForMenuItems(ids)
-    }
     LazyColumn(modifier = Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Current order
         if (currentOrder != null && currentOrder.items.isNotEmpty()) {
@@ -825,41 +811,43 @@ private fun PhoneBillPanel(
             items(allOrders, key = { it.orderId }) { bill ->
                 val isSelected = bill.orderId == selectedBillId
                 val isSettled = bill.status == "SETTLED"
-                SwipeableOrderCard(
-                    onDelete = { onRequestDeleteOrder(bill.orderId) },
-                    enabled = !isSettled
+                Card(
+                    modifier = Modifier.fillMaxWidth().animateItem().then(
+                        if (!isSettled) Modifier.clickable { viewModel.selectBill(bill.orderId) } else Modifier
+                    ),
+                    colors = CardDefaults.cardColors(containerColor = when {
+                        isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        isSettled -> MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)
+                        else -> MaterialTheme.colorScheme.surface
+                    }),
+                    border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
                 ) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth().animateItem().then(
-                            if (!isSettled) Modifier.clickable { viewModel.selectBill(bill.orderId) } else Modifier
-                        ),
-                        colors = CardDefaults.cardColors(containerColor = when {
-                            isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                            isSettled -> MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)
-                            else -> MaterialTheme.colorScheme.surface
-                        }),
-                        border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column {
                                 Text(bill.tableName, style = MaterialTheme.typography.titleMedium, color = if (isSettled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface)
                                 Text(if (isSettled) "已结账" else "${bill.itemCount}件 ¥%.0f".format(bill.totalPrice), style = MaterialTheme.typography.bodyMedium, color = if (isSettled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f) else MaterialTheme.colorScheme.primary)
                             }
-                            if (isSelected && !isSettled) {
-                                Spacer(Modifier.height(8.dp))
-                                HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
-                                bill.items.forEach { item ->
-                                    Column {
-                                        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                                            Text(item.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                                            Text("x${item.quantity}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                                        }
-                                        RecipeSubCard(recipe = recipeMap[item.menuItemId])
-                                    }
+                            if (!isSettled) {
+                                TextButton(onClick = { onRequestDeleteOrder(bill.orderId) }) {
+                                    Text("删除", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
                                 }
-                                Button(onClick = { viewModel.settleBill(bill.orderId) }, modifier = Modifier.fillMaxWidth(),
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) { Text("结账") }
                             }
+                        }
+                        if (isSelected && !isSettled) {
+                            Spacer(Modifier.height(8.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
+                            bill.items.forEach { item ->
+                                Column {
+                                    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                                        Text(item.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                                        Text("x${item.quantity}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                    }
+                                    RecipeSubCard(recipe = recipeMap[item.menuItemId])
+                                }
+                            }
+                            Button(onClick = { viewModel.settleBill(bill.orderId) }, modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) { Text("结账") }
                         }
                     }
                 }
@@ -1003,54 +991,6 @@ private fun RecipeSubCard(recipe: RecipeData?) {
                     Text("${step.stepNumber}. ${step.description}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }
             }
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun SwipeableOrderCard(
-    onDelete: () -> Unit,
-    enabled: Boolean = true,
-    content: @Composable () -> Unit
-) {
-    val offsetX = remember { Animatable(0f) }
-    val coroutineScope = rememberCoroutineScope()
-    val deleteThreshold = 160f
-    val bgColor by animateColorAsState(
-        if (offsetX.value > deleteThreshold * 0.3f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.error.copy(alpha = 0.3f),
-        animationSpec = spring()
-    )
-
-    Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))) {
-        if (enabled && offsetX.value > 8f) {
-            Box(
-                modifier = Modifier.matchParentSize().background(bgColor, RoundedCornerShape(12.dp))
-                    .clickable { coroutineScope.launch { offsetX.animateTo(0f); onDelete() } },
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Text("删除", modifier = Modifier.padding(start = 24.dp), color = MaterialTheme.colorScheme.onError, style = MaterialTheme.typography.titleSmall)
-            }
-        }
-        Box(
-            modifier = Modifier
-                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                .draggable(
-                    orientation = Orientation.Horizontal,
-                    state = rememberDraggableState { delta ->
-                        coroutineScope.launch {
-                            offsetX.snapTo((offsetX.value + delta).coerceIn(0f, 300f))
-                        }
-                    },
-                    enabled = enabled,
-                    onDragStopped = {
-                        coroutineScope.launch {
-                            if (offsetX.value > deleteThreshold) offsetX.animateTo(200f) else offsetX.animateTo(0f)
-                        }
-                    }
-                )
-        ) {
-            content()
         }
     }
 }
