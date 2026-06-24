@@ -1,12 +1,10 @@
 package com.order.app.ui.screen
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -15,13 +13,15 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -84,7 +84,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -1008,6 +1007,7 @@ private fun RecipeSubCard(recipe: RecipeData?) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SwipeableOrderCard(
     onDelete: () -> Unit,
@@ -1035,16 +1035,19 @@ private fun SwipeableOrderCard(
         Box(
             modifier = Modifier
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                .then(
-                    if (enabled) Modifier.pointerInput(Unit) {
-                        detectHorizontalDragGestures(
-                            onDragEnd = { coroutineScope.launch { if (offsetX.value > deleteThreshold) offsetX.animateTo(200f) else offsetX.animateTo(0f) } },
-                            onDragCancel = { coroutineScope.launch { offsetX.animateTo(0f) } },
-                            onHorizontalDrag = { _, dragAmount ->
-                                coroutineScope.launch { offsetX.snapTo((offsetX.value + dragAmount).coerceIn(0f, 300f)) }
-                            }
-                        )
-                    } else Modifier
+                .draggable(
+                    orientation = Orientation.Horizontal,
+                    state = rememberDraggableState { delta ->
+                        coroutineScope.launch {
+                            offsetX.snapTo((offsetX.value + delta).coerceIn(0f, 300f))
+                        }
+                    },
+                    enabled = enabled,
+                    onDragStopped = {
+                        coroutineScope.launch {
+                            if (offsetX.value > deleteThreshold) offsetX.animateTo(200f) else offsetX.animateTo(0f)
+                        }
+                    }
                 )
         ) {
             content()
