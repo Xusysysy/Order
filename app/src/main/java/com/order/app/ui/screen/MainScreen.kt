@@ -34,9 +34,11 @@ import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
@@ -589,10 +591,11 @@ private fun TabletBillPanel(
                             Text("¥%.0f".format(totalPrice), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                         }
                         currentOrder.items.forEach { item ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(item.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
                                     Text("¥%.0f".format(item.price), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                                    RecipeSubCard(recipe = recipeMap[item.menuItemId])
                                 }
                                 if (!isEditing) {
                                     QuantityStepper(quantity = item.quantity,
@@ -784,16 +787,19 @@ private fun PhoneBillPanel(
                         }
                         Spacer(Modifier.height(8.dp))
                         currentOrder.items.forEach { item ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(item.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                                    Text("¥%.0f x${item.quantity}".format(item.price), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(item.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                        Text("¥%.0f x${item.quantity}".format(item.price), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                    }
+                                    if (!isEditing) {
+                                        QuantityStepper(quantity = item.quantity,
+                                            onIncrement = { viewModel.updateQuantity(item, 1) },
+                                            onDecrement = { viewModel.updateQuantity(item, -1) })
+                                    }
                                 }
-                                if (!isEditing) {
-                                    QuantityStepper(quantity = item.quantity,
-                                        onIncrement = { viewModel.updateQuantity(item, 1) },
-                                        onDecrement = { viewModel.updateQuantity(item, -1) })
-                                }
+                                RecipeSubCard(recipe = recipeMap[item.menuItemId])
                             }
                         }
                         if (!isEditing) {
@@ -925,7 +931,7 @@ private fun MenuItemEditDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (isNew) "添加菜品" else "编辑菜品") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = price, onValueChange = { price = it }, label = { Text("价格") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -972,24 +978,15 @@ private fun MenuItemEditDialog(
 private fun RecipeSubCard(recipe: RecipeData?) {
     if (recipe == null) return
     if (recipe.steps.isEmpty() && recipe.ingredients.isEmpty()) return
-    var expanded by remember { mutableStateOf(false) }
-    val coroutineScope = rememberCoroutineScope()
-    TextButton(onClick = { expanded = !expanded }) {
-        Text(if (expanded) "收起配方 ▲" else "查看配方 ▼", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
-    }
-    AnimatedVisibility(visible = expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-        Column(modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)) {
-            if (recipe.ingredients.isNotEmpty()) {
-                Text("原料", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                recipe.ingredients.forEach { ing ->
-                    Text("• ${ing.name} ${ing.amount}${ing.unit}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                }
+    Column(modifier = Modifier.padding(start = 8.dp, bottom = 2.dp)) {
+        if (recipe.ingredients.isNotEmpty()) {
+            recipe.ingredients.forEach { ing ->
+                Text("• ${ing.name} ${ing.amount}${ing.unit}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
-            if (recipe.steps.isNotEmpty()) {
-                Text("步骤", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.padding(top = 4.dp))
-                recipe.steps.forEach { step ->
-                    Text("${step.stepNumber}. ${step.description}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                }
+        }
+        if (recipe.steps.isNotEmpty()) {
+            recipe.steps.forEach { step ->
+                Text("${step.stepNumber}. ${step.description}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
         }
     }

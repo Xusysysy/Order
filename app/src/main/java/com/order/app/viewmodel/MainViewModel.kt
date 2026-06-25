@@ -341,5 +341,9 @@ class MainViewModel(
         val updated = orderRepository.getOrderWithItems(orderId)
         _currentOrder.value = updated
         _totalPrice.value = updated?.items?.sumOf { it.price * it.quantity } ?: 0.0
+        updated?.items?.map { it.menuItemId }?.distinct()?.let { ids ->
+            val recipes = menuRepository.getRecipesForMenuItems(ids)
+            _recipeMap.value = _recipeMap.value + recipes
+        }
     }
 }
