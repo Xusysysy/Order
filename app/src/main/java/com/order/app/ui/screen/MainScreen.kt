@@ -263,7 +263,7 @@ fun MainScreen(viewModel: MainViewModel, isDark: Boolean, onToggleTheme: () -> U
                         onAddTable = { if (newTableName.isNotBlank()) { viewModel.addTable(newTableName); newTableName = ""; showAddTableDialog = false } },
                         showEditDialog = showEditDialog, editingItem = editingItem,
                         onShowEditDialog = { item -> editingItem = item; showEditDialog = true },
-                        onDismissEditDialog = { showEditDialog = false },
+            onDismissEditDialog = { showEditDialog = false; editingItem = null },
                         viewModel = viewModel
                     )
                     1 -> PhoneBillPanel(
@@ -386,7 +386,7 @@ private fun TabletLayout(
 ) {
     var showTableMenu by remember { mutableStateOf(false) }
 
-    if (editingItem != null || showEditDialog) {
+    if (showEditDialog) {
         val categories = menuItems.map { it.category }.distinct()
         MenuItemEditDialog(
             editingItem = editingItem,
@@ -925,6 +925,8 @@ private fun MenuItemEditDialog(
     var selectedCategory by remember(editingItem) { mutableStateOf(editingItem?.category ?: allCategories.firstOrNull() ?: "other") }
     var newCategory by remember { mutableStateOf("") }
     var showAddCategory by remember { mutableStateOf(false) }
+    val customCategories = remember { mutableStateListOf<String>() }
+    val displayedCategories = (allCategories + customCategories).distinct()
     val isNew = editingItem == null
 
     AlertDialog(
@@ -935,7 +937,7 @@ private fun MenuItemEditDialog(
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = price, onValueChange = { price = it }, label = { Text("价格") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    allCategories.forEach { cat ->
+                    displayedCategories.forEach { cat ->
                         FilterChip(selected = cat == selectedCategory, onClick = { selectedCategory = cat }, label = { Text(categoryLabel(cat)) })
                     }
                     if (!showAddCategory) {
@@ -945,7 +947,14 @@ private fun MenuItemEditDialog(
                 if (showAddCategory) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(value = newCategory, onValueChange = { newCategory = it }, label = { Text("新分类") }, singleLine = true, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { if (newCategory.isNotBlank()) { selectedCategory = newCategory; newCategory = ""; showAddCategory = false } }) { Text("确认") }
+                        TextButton(onClick = {
+                            if (newCategory.isNotBlank()) {
+                                selectedCategory = newCategory
+                                if (newCategory !in customCategories) customCategories.add(newCategory)
+                                newCategory = ""
+                                showAddCategory = false
+                            }
+                        }) { Text("确认") }
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
