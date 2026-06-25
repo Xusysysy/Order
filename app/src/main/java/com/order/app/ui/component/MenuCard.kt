@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -47,12 +46,16 @@ fun MenuCard(
     var addBtnY by remember { mutableIntStateOf(0) }
 
     Card(
-        onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Box {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier
+                .then(
+                    if (!showAddButton) Modifier.clickable { onClick() } else Modifier
+                )
+                .padding(12.dp)
+            ) {
                 Text(
                     text = item.name,
                     style = MaterialTheme.typography.titleMedium,

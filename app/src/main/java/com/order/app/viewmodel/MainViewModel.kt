@@ -83,16 +83,21 @@ class MainViewModel(
     init {
         viewModelScope.launch {
             tableRepository.createDefaultTables()
-            loadTables()
-            loadMenuItems()
+
+            val list = tableRepository.getAllDirect()
+            _tables.value = list
+            _zones.value = list.map { it.zone }.distinct()
 
             val savedTableId = prefs.getLong("selected_table_id", -1L)
-            val tablesList = _tables.value
-            if (savedTableId > 0 && tablesList.any { it.id == savedTableId }) {
+            if (savedTableId > 0 && list.any { it.id == savedTableId }) {
                 selectTable(savedTableId)
-            } else if (tablesList.isNotEmpty()) {
-                selectTable(tablesList.first().id)
+            } else if (list.isNotEmpty()) {
+                selectTable(list.first().id)
             }
+
+            menuRepository.getAll().collect { _menuItems.value = it }
+
+            loadAllOrders()
         }
     }
 
