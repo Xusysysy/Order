@@ -277,8 +277,8 @@ class MainViewModel(
         viewModelScope.launch {
             _currentOrder.value?.order?.let {
                 orderRepository.updateOrderStatus(it.id, OrderEntity.STATUS_SETTLED)
-                _currentOrder.value = null
-                _totalPrice.value = 0.0
+                val settled = it.copy(status = OrderEntity.STATUS_SETTLED)
+                _currentOrder.value = _currentOrder.value?.copy(order = settled)
             }
         }
     }

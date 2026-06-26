@@ -1,6 +1,7 @@
 package com.order.app.ui.screen
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -148,6 +149,7 @@ fun MainScreen(viewModel: MainViewModel, isDark: Boolean, onToggleTheme: () -> U
     var showTableDrawer by remember { mutableStateOf(false) }
     var showAddTableDialog by remember { mutableStateOf(false) }
     var newTableName by remember { mutableStateOf("") }
+    var newTableZone by remember { mutableStateOf("大厅") }
     var showEditDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<MenuItemEntity?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -325,12 +327,34 @@ fun MainScreen(viewModel: MainViewModel, isDark: Boolean, onToggleTheme: () -> U
 
     // Add table dialog
     if (showAddTableDialog) {
+        var dialogZone by remember { mutableStateOf(newTableZone) }
+        var dialogNewZone by remember { mutableStateOf("") }
+        var dialogShowNewZone by remember { mutableStateOf(false) }
         AlertDialog(
             onDismissRequest = { showAddTableDialog = false },
             title = { Text("添加桌位") },
-            text = { OutlinedTextField(value = newTableName, onValueChange = { newTableName = it }, label = { Text("桌号名称") }, singleLine = true) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    OutlinedTextField(value = newTableName, onValueChange = { newTableName = it }, label = { Text("桌号名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Text("分区", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        zones.forEach { z ->
+                            FilterChip(selected = z == dialogZone, onClick = { dialogZone = z }, label = { Text(z.ifEmpty { "未分类" }) })
+                        }
+                        if (!dialogShowNewZone) {
+                            TextButton(onClick = { dialogShowNewZone = true }) { Text("+新区", fontSize = 12.sp) }
+                        }
+                    }
+                    if (dialogShowNewZone) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(value = dialogNewZone, onValueChange = { dialogNewZone = it }, label = { Text("新区名") }, singleLine = true, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { if (dialogNewZone.isNotBlank()) { dialogZone = dialogNewZone; dialogNewZone = ""; dialogShowNewZone = false } }) { Text("确认") }
+                        }
+                    }
+                }
+            },
             confirmButton = { Button(onClick = {
-                if (newTableName.isNotBlank()) { viewModel.addTable(newTableName); newTableName = ""; showAddTableDialog = false }
+                if (newTableName.isNotBlank()) { viewModel.addTable(newTableName, dialogZone); newTableName = ""; showAddTableDialog = false }
             }) { Text("添加") } },
             dismissButton = { TextButton(onClick = { showAddTableDialog = false }) { Text("取消") } }
         )
@@ -628,18 +652,26 @@ private fun TabletBillPanel(
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // Current order
         if (currentOrder != null && currentOrder.items.isNotEmpty()) {
+            val isCurrentSettled = currentOrder?.order?.status == "SETTLED"
             item(key = "active") {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(8.dp)) {
+                Card(colors = CardDefaults.cardColors(
+                    containerColor = if (isCurrentSettled) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface
+                ), modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(8.dp).animateContentSize()) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("当前", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                            Text("¥%.0f".format(totalPrice), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                            Text(
+                                if (isCurrentSettled) "已结账" else "¥%.0f".format(totalPrice),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isCurrentSettled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f) else MaterialTheme.colorScheme.primary
+                            )
                         }
                         currentOrder.items.forEach { item ->
                             key(item.id) {
                                 AnimatedVisibility(
                                     visible = true,
-                                    enter = fadeIn(animationSpec = tween(300)) + expandVertically(animationSpec = tween(300))
+                                    enter = fadeIn(animationSpec = tween(300)) + expandVertically(animationSpec = tween(300)),
+                                    exit = fadeOut(animationSpec = tween(300)) + shrinkVertically(animationSpec = tween(300))
                                 ) {
                                     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Column(Modifier.weight(1f)) {
@@ -647,7 +679,7 @@ private fun TabletBillPanel(
                                             Text("¥%.0f".format(item.price), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
                                             RecipeSubCard(recipe = recipeMap[item.menuItemId])
                                         }
-                                        if (!isEditing) {
+                                        if (!isEditing && !isCurrentSettled) {
                                             QuantityStepper(quantity = item.quantity,
                                                 onIncrement = { viewModel.updateQuantity(item, 1) },
                                                 onDecrement = { viewModel.updateQuantity(item, -1) },
@@ -657,7 +689,7 @@ private fun TabletBillPanel(
                                 }
                             }
                         }
-                        if (!isEditing) {
+                        if (!isEditing && !isCurrentSettled) {
                             Button(onClick = { viewModel.settleOrder() }, modifier = Modifier.fillMaxWidth().height(36.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
                                 Text("结账", style = MaterialTheme.typography.bodySmall)
@@ -861,19 +893,27 @@ private fun PhoneBillPanel(
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Current order
         if (currentOrder != null && currentOrder.items.isNotEmpty()) {
+            val isCurrentSettled = currentOrder?.order?.status == "SETTLED"
             item(key = "active") {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                Card(colors = CardDefaults.cardColors(
+                    containerColor = if (isCurrentSettled) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface
+                ), modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(12.dp).animateContentSize()) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("当前订单", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                            Text("¥%.0f".format(totalPrice), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                            Text(
+                                if (isCurrentSettled) "已结账" else "¥%.0f".format(totalPrice),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = if (isCurrentSettled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f) else MaterialTheme.colorScheme.primary
+                            )
                         }
                         Spacer(Modifier.height(8.dp))
                         currentOrder.items.forEach { item ->
                             key(item.id) {
                                 AnimatedVisibility(
                                     visible = true,
-                                    enter = fadeIn(animationSpec = tween(300)) + expandVertically(animationSpec = tween(300))
+                                    enter = fadeIn(animationSpec = tween(300)) + expandVertically(animationSpec = tween(300)),
+                                    exit = fadeOut(animationSpec = tween(300)) + shrinkVertically(animationSpec = tween(300))
                                 ) {
                                     Column(modifier = Modifier.padding(vertical = 4.dp)) {
                                         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -881,7 +921,7 @@ private fun PhoneBillPanel(
                                                 Text(item.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                                                 Text("¥%.0f x${item.quantity}".format(item.price), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                                             }
-                                            if (!isEditing) {
+                                            if (!isEditing && !isCurrentSettled) {
                                                 QuantityStepper(quantity = item.quantity,
                                                     onIncrement = { viewModel.updateQuantity(item, 1) },
                                                     onDecrement = { viewModel.updateQuantity(item, -1) })
@@ -892,7 +932,7 @@ private fun PhoneBillPanel(
                                 }
                             }
                         }
-                        if (!isEditing) {
+                        if (!isEditing && !isCurrentSettled) {
                             Spacer(Modifier.height(8.dp))
                             Button(onClick = { viewModel.settleOrder() }, modifier = Modifier.fillMaxWidth(),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) { Text("结账") }
