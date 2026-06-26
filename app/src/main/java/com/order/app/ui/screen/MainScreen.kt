@@ -679,14 +679,14 @@ private fun TabletBillPanel(
                         content = {
                             Card(
                                 modifier = Modifier.fillMaxWidth().animateItem(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                                 border = null
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                         Column {
-                                            Text(bill.tableName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
-                                            Text("已结账", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
+                                            Text(bill.tableName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                            Text("已结账", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                                         }
                                     }
                                 }
@@ -700,7 +700,6 @@ private fun TabletBillPanel(
                     ),
                     colors = CardDefaults.cardColors(containerColor = when {
                         isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                        isSettled -> MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)
                         else -> MaterialTheme.colorScheme.surface
                     }),
                     border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
@@ -914,14 +913,14 @@ private fun PhoneBillPanel(
                         content = {
                             Card(
                                 modifier = Modifier.fillMaxWidth().animateItem(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                                 border = null
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                         Column {
-                                            Text(bill.tableName, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
-                                            Text("已结账", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
+                                            Text(bill.tableName, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                                            Text("已结账", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                                         }
                                     }
                                 }
@@ -935,7 +934,6 @@ private fun PhoneBillPanel(
                     ),
                     colors = CardDefaults.cardColors(containerColor = when {
                         isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                        isSettled -> MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)
                         else -> MaterialTheme.colorScheme.surface
                     }),
                     border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
