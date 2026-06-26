@@ -1,6 +1,8 @@
 package com.order.app.ui.screen
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -11,10 +13,12 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,6 +36,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -67,6 +72,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -76,9 +82,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -144,6 +152,8 @@ fun MainScreen(viewModel: MainViewModel, isDark: Boolean, onToggleTheme: () -> U
     var editingItem by remember { mutableStateOf<MenuItemEntity?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var deleteOrderId by remember { mutableStateOf<Long?>(null) }
+    var showTableEditDialog by remember { mutableStateOf(false) }
+    var editingTable by remember { mutableStateOf<TableEntity?>(null) }
 
     // Delete confirmation dialog (shared by tablet and phone)
     if (showDeleteConfirm && deleteOrderId != null) {
@@ -158,6 +168,17 @@ fun MainScreen(viewModel: MainViewModel, isDark: Boolean, onToggleTheme: () -> U
                 }
             },
             dismissButton = { TextButton(onClick = { showDeleteConfirm = false; deleteOrderId = null }) { Text("取消") } }
+        )
+    }
+
+    // Table edit dialog (shared by tablet and phone)
+    if (showTableEditDialog && editingTable != null) {
+        TableEditDialog(
+            table = editingTable!!,
+            allZones = zones,
+            onDismiss = { showTableEditDialog = false; editingTable = null },
+            onSave = { viewModel.updateTable(it); showTableEditDialog = false; editingTable = null },
+            onDelete = { viewModel.deleteTable(editingTable!!.id); showTableEditDialog = false; editingTable = null }
         )
     }
 
@@ -183,7 +204,9 @@ fun MainScreen(viewModel: MainViewModel, isDark: Boolean, onToggleTheme: () -> U
             showEditDialog = showEditDialog, editingItem = editingItem,
             onShowEditDialog = { item -> editingItem = item; showEditDialog = true },
             onDismissEditDialog = { showEditDialog = false },
-            onRequestDeleteOrder = { id -> deleteOrderId = id; showDeleteConfirm = true }
+            onRequestDeleteOrder = { id -> deleteOrderId = id; showDeleteConfirm = true },
+            editingTable = editingTable,
+            onShowTableEditDialog = { table -> editingTable = table; showTableEditDialog = true }
         )
         return
     }
@@ -248,7 +271,7 @@ fun MainScreen(viewModel: MainViewModel, isDark: Boolean, onToggleTheme: () -> U
                 userScrollEnabled = false
             ) { page ->
                 when (page) {
-                    0 -> PhoneMenuPanel(
+                    0 ->             PhoneMenuPanel(
                         tables = tables, selectedTableId = selectedTableId, selectedTable = selectedTable,
                         zones = zones, menuItems = menuItems, currentOrder = currentOrder, totalPrice = totalPrice,
                         orderQuantities = orderQuantities, orderItemMap = orderItemMap, totalItemCount = totalItemCount,
@@ -290,7 +313,8 @@ fun MainScreen(viewModel: MainViewModel, isDark: Boolean, onToggleTheme: () -> U
                 onSelectTable = { viewModel.selectTable(it.id); showTableDrawer = false },
                 onDeleteTable = { viewModel.deleteTable(it.id) },
                 onAddTable = { showTableDrawer = false; showAddTableDialog = true },
-                onDismiss = { showTableDrawer = false }
+                onDismiss = { showTableDrawer = false },
+                onShowTableEditDialog = { table -> editingTable = table; showTableEditDialog = true }
             )
         }
         if (showTableDrawer) {
@@ -382,7 +406,9 @@ private fun TabletLayout(
     onShowAddTableDialog: () -> Unit, onDismissAddTableDialog: () -> Unit, onAddTable: () -> Unit,
     showEditDialog: Boolean, editingItem: MenuItemEntity?,
     onShowEditDialog: (MenuItemEntity?) -> Unit, onDismissEditDialog: () -> Unit,
-    onRequestDeleteOrder: (Long) -> Unit
+    onRequestDeleteOrder: (Long) -> Unit,
+    editingTable: TableEntity?,
+    onShowTableEditDialog: (TableEntity) -> Unit
 ) {
     var showTableMenu by remember { mutableStateOf(false) }
 
@@ -445,7 +471,8 @@ private fun TabletLayout(
                     currentOrder = currentOrder, totalPrice = totalPrice, totalItemCount = totalItemCount,
                     viewModel = viewModel, showTableMenu = showTableMenu,
                     onToggleTableMenu = { showTableMenu = it },
-                    onShowEditDialog = { item -> onShowEditDialog(item) }
+                    onShowEditDialog = { item -> onShowEditDialog(item) },
+                    onShowTableEditDialog = onShowTableEditDialog
                 )
             }
             Surface(modifier = Modifier.weight(1f).fillMaxHeight(), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), tonalElevation = 4.dp) {
@@ -468,7 +495,8 @@ private fun TabletMenuPanel(
     orderQuantities: Map<Long, Int>, orderItemMap: Map<Long, OrderItemEntity>,
     currentOrder: OrderWithItems?, totalPrice: Double, totalItemCount: Int,
     viewModel: MainViewModel, showTableMenu: Boolean,
-    onToggleTableMenu: (Boolean) -> Unit, onShowEditDialog: (MenuItemEntity?) -> Unit
+    onToggleTableMenu: (Boolean) -> Unit, onShowEditDialog: (MenuItemEntity?) -> Unit,
+    onShowTableEditDialog: (TableEntity) -> Unit
 ) {
     val categories = menuItems.map { it.category }.distinct()
     var selectedCategory by remember { mutableStateOf(categories.firstOrNull() ?: "") }
@@ -503,7 +531,14 @@ private fun TabletMenuPanel(
                                         Text(table.name)
                                     }
                                 },
-                                onClick = { viewModel.selectTable(table.id); onToggleTableMenu(false) },
+                                onClick = {
+                                    if (isEditing) {
+                                        onShowTableEditDialog(table)
+                                    } else {
+                                        viewModel.selectTable(table.id)
+                                    }
+                                    onToggleTableMenu(false)
+                                },
                                 leadingIcon = if (table.id == selectedTableId) {{ Text("✓", color = MaterialTheme.colorScheme.primary) }} else null
                             )
                         }
@@ -580,7 +615,17 @@ private fun TabletBillPanel(
     recipeMap: Map<Long, RecipeData>,
     onRequestDeleteOrder: (Long) -> Unit
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    val listState = rememberLazyListState()
+    val itemCount = currentOrder?.items?.size ?: 0
+    var prevCount by remember { mutableIntStateOf(itemCount) }
+    LaunchedEffect(itemCount) {
+        if (itemCount > prevCount && itemCount > 0) {
+            listState.animateScrollToItem(0)
+        }
+        prevCount = itemCount
+    }
+
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // Current order
         if (currentOrder != null && currentOrder.items.isNotEmpty()) {
             item(key = "active") {
@@ -591,17 +636,24 @@ private fun TabletBillPanel(
                             Text("¥%.0f".format(totalPrice), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                         }
                         currentOrder.items.forEach { item ->
-                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(item.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
-                                    Text("¥%.0f".format(item.price), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
-                                    RecipeSubCard(recipe = recipeMap[item.menuItemId])
-                                }
-                                if (!isEditing) {
-                                    QuantityStepper(quantity = item.quantity,
-                                        onIncrement = { viewModel.updateQuantity(item, 1) },
-                                        onDecrement = { viewModel.updateQuantity(item, -1) },
-                                        compact = true)
+                            key(item.id) {
+                                AnimatedVisibility(
+                                    visible = true,
+                                    enter = fadeIn(animationSpec = tween(300)) + expandVertically(animationSpec = tween(300))
+                                ) {
+                                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(item.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                                            Text("¥%.0f".format(item.price), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                                            RecipeSubCard(recipe = recipeMap[item.menuItemId])
+                                        }
+                                        if (!isEditing) {
+                                            QuantityStepper(quantity = item.quantity,
+                                                onIncrement = { viewModel.updateQuantity(item, 1) },
+                                                onDecrement = { viewModel.updateQuantity(item, -1) },
+                                                compact = true)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -621,6 +673,27 @@ private fun TabletBillPanel(
             items(allOrders, key = { it.orderId }) { bill ->
                 val isSelected = bill.orderId == selectedBillId
                 val isSettled = bill.status == "SETTLED"
+                if (isSettled) {
+                    SwipeableCard(
+                        onDelete = { onRequestDeleteOrder(bill.orderId) },
+                        content = {
+                            Card(
+                                modifier = Modifier.fillMaxWidth().animateItem(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)),
+                                border = null
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                        Column {
+                                            Text(bill.tableName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                                            Text("已结账", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    )
+                } else {
                 Card(
                     modifier = Modifier.fillMaxWidth().animateItem().then(
                         if (!isSettled) Modifier.clickable { viewModel.selectBill(bill.orderId) } else Modifier
@@ -662,6 +735,7 @@ private fun TabletBillPanel(
                             }
                         }
                     }
+                }
                 }
             }
         }
@@ -775,7 +849,17 @@ private fun PhoneBillPanel(
     recipeMap: Map<Long, RecipeData>,
     onRequestDeleteOrder: (Long) -> Unit
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val listState = rememberLazyListState()
+    val itemCount = currentOrder?.items?.size ?: 0
+    var prevCount by remember { mutableIntStateOf(itemCount) }
+    LaunchedEffect(itemCount) {
+        if (itemCount > prevCount && itemCount > 0) {
+            listState.animateScrollToItem(0)
+        }
+        prevCount = itemCount
+    }
+
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Current order
         if (currentOrder != null && currentOrder.items.isNotEmpty()) {
             item(key = "active") {
@@ -787,19 +871,26 @@ private fun PhoneBillPanel(
                         }
                         Spacer(Modifier.height(8.dp))
                         currentOrder.items.forEach { item ->
-                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(item.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                                        Text("¥%.0f x${item.quantity}".format(item.price), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                                    }
-                                    if (!isEditing) {
-                                        QuantityStepper(quantity = item.quantity,
-                                            onIncrement = { viewModel.updateQuantity(item, 1) },
-                                            onDecrement = { viewModel.updateQuantity(item, -1) })
+                            key(item.id) {
+                                AnimatedVisibility(
+                                    visible = true,
+                                    enter = fadeIn(animationSpec = tween(300)) + expandVertically(animationSpec = tween(300))
+                                ) {
+                                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(item.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                                Text("¥%.0f x${item.quantity}".format(item.price), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                            }
+                                            if (!isEditing) {
+                                                QuantityStepper(quantity = item.quantity,
+                                                    onIncrement = { viewModel.updateQuantity(item, 1) },
+                                                    onDecrement = { viewModel.updateQuantity(item, -1) })
+                                            }
+                                        }
+                                        RecipeSubCard(recipe = recipeMap[item.menuItemId])
                                     }
                                 }
-                                RecipeSubCard(recipe = recipeMap[item.menuItemId])
                             }
                         }
                         if (!isEditing) {
@@ -817,6 +908,27 @@ private fun PhoneBillPanel(
             items(allOrders, key = { it.orderId }) { bill ->
                 val isSelected = bill.orderId == selectedBillId
                 val isSettled = bill.status == "SETTLED"
+                if (isSettled) {
+                    SwipeableCard(
+                        onDelete = { onRequestDeleteOrder(bill.orderId) },
+                        content = {
+                            Card(
+                                modifier = Modifier.fillMaxWidth().animateItem(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)),
+                                border = null
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                        Column {
+                                            Text(bill.tableName, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                                            Text("已结账", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    )
+                } else {
                 Card(
                     modifier = Modifier.fillMaxWidth().animateItem().then(
                         if (!isSettled) Modifier.clickable { viewModel.selectBill(bill.orderId) } else Modifier
@@ -857,6 +969,7 @@ private fun PhoneBillPanel(
                         }
                     }
                 }
+                }
             }
         }
         if ((currentOrder == null || currentOrder.items.isEmpty()) && allOrders.isEmpty()) {
@@ -874,7 +987,8 @@ private fun PhoneTableDrawer(
     onSelectTable: (TableEntity) -> Unit,
     onDeleteTable: (TableEntity) -> Unit,
     onAddTable: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onShowTableEditDialog: (TableEntity) -> Unit
 ) {
     Surface(modifier = Modifier.width(280.dp).fillMaxHeight(), color = MaterialTheme.colorScheme.surface, tonalElevation = 8.dp) {
         Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
@@ -889,8 +1003,14 @@ private fun PhoneTableDrawer(
                     }
                     items(tables.filter { it.zone == zone }) { table ->
                         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.weight(1f)) {
-                                TableChip(table = table, isSelected = table.id == selectedTableId, onClick = { onSelectTable(table) })
+                            Box(modifier = Modifier.weight(1f).clickable {
+                                if (isEditing) {
+                                    onShowTableEditDialog(table)
+                                } else {
+                                    onSelectTable(table)
+                                }
+                            }) {
+                                TableChip(table = table, isSelected = table.id == selectedTableId, onClick = {})
                             }
                             if (isEditing) {
                                 TextButton(onClick = { onDeleteTable(table) }) { Text("删除", color = MaterialTheme.colorScheme.error) }
@@ -981,6 +1101,116 @@ private fun MenuItemEditDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
+}
+
+// ======================= TABLE EDIT DIALOG =======================
+
+@Composable
+private fun TableEditDialog(
+    table: TableEntity,
+    allZones: List<String>,
+    onDismiss: () -> Unit,
+    onSave: (TableEntity) -> Unit,
+    onDelete: () -> Unit
+) {
+    var name by remember { mutableStateOf(table.name) }
+    var zone by remember { mutableStateOf(table.zone) }
+    var newZone by remember { mutableStateOf("") }
+    var showNewZone by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("编辑桌位") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("桌号名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text("分区", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    allZones.forEach { z ->
+                        FilterChip(selected = z == zone, onClick = { zone = z }, label = { Text(z.ifEmpty { "未分类" }) })
+                    }
+                    if (!showNewZone) {
+                        TextButton(onClick = { showNewZone = true }) { Text("+新区", fontSize = 12.sp) }
+                    }
+                }
+                if (showNewZone) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(value = newZone, onValueChange = { newZone = it }, label = { Text("新区名") }, singleLine = true, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { if (newZone.isNotBlank()) { zone = newZone; newZone = ""; showNewZone = false } }) { Text("确认") }
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                HorizontalDivider()
+                TextButton(onClick = onDelete) { Text("删除此桌位", color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = { Button(onClick = { onSave(table.copy(name = name, zone = zone)) }) { Text("保存") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
+}
+
+// ======================= SWIPEABLE CARD =======================
+
+@Composable
+private fun SwipeableCard(
+    onDelete: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val density = LocalDensity.current
+    val deleteWidthPx = with(density) { 80.dp.toPx() }
+    val offsetX = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+
+    Box(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.width(70.dp).fillMaxHeight()
+                    .clickable {
+                        scope.launch { offsetX.animateTo(0f) }
+                        onDelete()
+                    },
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Text("删除", color = MaterialTheme.colorScheme.onError, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            scope.launch {
+                                if (offsetX.value < -deleteWidthPx / 2) {
+                                    offsetX.animateTo(-deleteWidthPx)
+                                } else {
+                                    offsetX.animateTo(0f)
+                                }
+                            }
+                        },
+                        onDragCancel = {
+                            scope.launch { offsetX.animateTo(0f) }
+                        },
+                        onHorizontalDrag = { _, dragAmount ->
+                            scope.launch {
+                                offsetX.snapTo((offsetX.value + dragAmount).coerceIn(-deleteWidthPx, 0f))
+                            }
+                        }
+                    )
+                }
+        ) {
+            content()
+        }
+    }
 }
 
 @Composable
